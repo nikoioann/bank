@@ -1,0 +1,4 @@
+.vscode/
+testfiles/
+*.txt
+a.out
