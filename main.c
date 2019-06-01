@@ -1,22 +1,18 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <mpi.h>
-#include <string.h>
-#include <stddef.h>
-#include <time.h>
-#include <unistd.h>
+#include "list.h"
 
-#define DELIMETERS " "
-#define ACK_TAG 0
-#define CLIENT 1
-#define NEIGHBOR 2
+
 
 
 int main(int argc, char *argv[]){
-	int rank, world_size, bank_offset,i; 
-    char *file;
+	int rank, world_size, bank_offset; 
+    // char *file;
 
-	/** MPI Initialisation **/
+	if(argc<3){
+        printf("Error on number of arguments given\n number of banks and testfile needed\n");
+        exit(EXIT_FAILURE);
+    }
+
+    /** MPI Initialisation **/
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &world_size);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -32,59 +28,49 @@ int main(int argc, char *argv[]){
 
     MPI_Status status;
     int client_bank[2];
+    int any=0;
     if(!rank){ //coordinator
-        //opens testfile and reads
-        char *line = NULL;
-        char *command = (char*)malloc(128);
-        int opt_arr[3] = {0};
-        char *token;
-        size_t len = 0;
-        ssize_t read = 0;
-        FILE *fp = fopen(argv[2],"r");
+        readnparse_commands(argv[2]);
+        // print_list();
 
-        if(!fp){
-            MPI_Finalize();
-            printf("Error opening testfile <%s>\n",argv[2]);
-            exit(EXIT_FAILURE); 
-        }
+        curr = head;
 
-        while ((read = getline(&line, &len, fp)) != -1) {
-            printf("%s\n", line);
-
-            token = strtok(line, DELIMETERS);
-            i=0;
-
-            while( token != NULL ) {
-                if(i==0){
-                    strncpy( command,token,strlen(token));
-                    printf("%s\n",command);
-                } 
-                else{
-                    opt_arr[i-1] = atoi(token);
-                }
-                printf("%d:%d:%d\n",opt_arr[0],opt_arr[1],opt_arr[2]);
+        while(curr!=NULL){
+            switch (op2num(curr->op))
+            {
+            case CLIENT:
+                MPI_Send(curr->args,3,MPI_INT,curr->args[0],CLIENT,MPI_COMM_WORLD);
+                MPI_Send(curr->args,3,MPI_INT,curr->args[1],CLIENT,MPI_COMM_WORLD);
                 
-                i++;
-                token = strtok(NULL, DELIMETERS);
+                MPI_Recv(&any,1,MPI_INT,MPI_ANY_SOURCE,ACK_TAG,MPI_COMM_WORLD,&status);
+		        printf("Coordinator received ack message from %d\n", status.MPI_SOURCE);
+                MPI_Recv(&any,1,MPI_INT,MPI_ANY_SOURCE,ACK_TAG,MPI_COMM_WORLD,&status);
+		        printf("Coordinator received ack message from %d\n", status.MPI_SOURCE);
+                break;
+            
+            default:
+                break;
             }
-
-            client_bank[0] = opt_arr[0];
-            client_bank[1] = opt_arr[1];
-
-            MPI_Send(client_bank,2,MPI_INT,client_bank[0],CLIENT,MPI_COMM_WORLD);
-            MPI_Send(client_bank,2,MPI_INT,client_bank[1],CLIENT,MPI_COMM_WORLD);
+            
+            curr = curr->next;
         }
+
     }else
     if(rank <= bank_offset){//banks
+        int myclients[10];
+        int tail=0;
 
-		MPI_Recv(client_bank, 2, MPI_INT, MPI_ANY_SOURCE, CLIENT, MPI_COMM_WORLD, &status);
+		MPI_Recv(client_bank, 3, MPI_INT, MPI_ANY_SOURCE, CLIENT, MPI_COMM_WORLD, &status);
 		printf("[rank: %d]  Bank received message: [%d, %d] from %d\n", rank, client_bank[0], client_bank[1], status.MPI_SOURCE);
+        myclients[tail++] = client_bank[0];
+        MPI_Send(&any,1,MPI_INT,status.MPI_SOURCE,ACK_TAG,MPI_COMM_WORLD);
 
     }else{//clients
-
-		MPI_Recv(client_bank, 2, MPI_INT, MPI_ANY_SOURCE, CLIENT, MPI_COMM_WORLD, &status);
+        int mybank=0;
+		MPI_Recv(client_bank, 3, MPI_INT, MPI_ANY_SOURCE, CLIENT, MPI_COMM_WORLD, &status);
 		printf("[rank: %d]  Client received message: [%d, %d] from %d\n", rank, client_bank[0], client_bank[1], status.MPI_SOURCE);
-
+        mybank = client_bank[1];
+        MPI_Send(&any,1,MPI_INT,status.MPI_SOURCE,ACK_TAG,MPI_COMM_WORLD);
     }
 
 
