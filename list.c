@@ -7,7 +7,7 @@ command* curr = NULL;
 command *create(void){
     command *ptr = (command*)malloc(sizeof(struct command));
     ptr->op     =  (char*)malloc(sizeof(char)*32);
-    memset(ptr->args,0,3*sizeof(int));
+    memset(ptr->args,0,4*sizeof(int));
     ptr->next   = NULL;
     return ptr;
 }
@@ -69,6 +69,27 @@ int n_insert(neighbors **n_head,neighbors* ptr){
     return 1;
 }
 
+transfers *t_create(void){
+    transfers *ptr = (transfers*)malloc(sizeof(struct transfers));
+    ptr->tid = ptr->src = ptr->dest = ptr->amount = ptr->banksend = 0;
+    ptr->next   = NULL;
+    return ptr;
+}
+
+int t_insert(transfers **n_head,transfers* ptr){
+    transfers* tmp = (*n_head);
+    if(!(*n_head)){
+        (*n_head) = ptr;
+    }else{
+        while(tmp->next!=NULL){
+            tmp = tmp->next;
+        }
+
+        tmp->next = ptr;
+    }
+    return 1;
+}
+
 void free_all(void){  
     command *tmp;
     while(head!=NULL){
@@ -117,13 +138,23 @@ void readnparse_commands(char* file){
 }
 
 int op2num(char* op){
-         if(!strcmp(op,"CLIENT"))       return 1;
-    else if(!strcmp(op,"NEIGHBOR"))     return 2;
-    else if(!strcmp(op,"DEPOSIT"))      return 3;
-    else if(!strcmp(op,"WITHDRAW"))     return 4;
-    else if(!strcmp(op,"TRANSFER"))     return 5;
-    else if(!strcmp(op,"TERMINATE"))    return 6;
-    else                                return 0;
+         if(!strcmp(op,"CLIENT"))           return 1;
+    else if(!strcmp(op,"NEIGHBOR"))         return 2;
+    else if(!strcmp(op,"DEPOSIT"))          return 3;
+    else if(!strcmp(op,"WITHDRAW"))         return 4;
+    else if(!strcmp(op,"TRANSFER"))         return 5;
+    else if(!strcmp(op,"SHUTDOWN"))         return 6;
+    else if(!strcmp(op,"DEPOSIT_OK"))       return 7;
+    else if(!strcmp(op,"DEPOSIT_ACK"))      return 8;
+    else if(!strcmp(op,"ACK_TAG"))          return 9;
+    else if(!strcmp(op,"WITHDRAW_OK"))      return 10;
+    else if(!strcmp(op,"WITHDRAW_FAILED"))  return 11;
+    else if(!strcmp(op,"WITHDRAW_ACK"))     return 12;
+    else if(!strcmp(op,"TRANSFER_ACK"))     return 13;
+    else {
+        printf("op2num else ERRROR\n");
+        return 0;
+    }
 }
 
 char* op2str(int op){
@@ -134,8 +165,15 @@ char* op2str(int op){
         case 3: return  "DEPOSIT";
         case 4: return  "WITHDRAW";
         case 5: return  "TRANSFER";
-        case 6: return  "TERMINATE";
-        default: exit(-1);
+        case 6: return  "SHUTDOWN";
+        case 7: return  "DEPOSIT_OK";
+        case 8: return  "DEPOSIT_ACK";
+        case 9: return  "ACK_TAG";
+        case 10: return  "WITHDRAW_OK";
+        case 11: return  "WITHDRAW_FAILED";
+        case 12: return  "WITHDRAW_ACK";
+        case 13: return  "TRANSFER_ACK";
+        default:     printf("op2num else ERRROR\n");return "empty";
     }
 }
 void print_list(){
@@ -155,4 +193,37 @@ clients *get_client(clients* head,int id){
         c_curr = c_curr->next;
     }
     return NULL;
+}
+
+transfers *get_transfer(transfers* head,int tid){
+    transfers *curr = head;
+    while(curr!=NULL){
+        if(curr->tid == tid){
+            return curr;
+        }
+        curr = curr->next;
+    }
+    return NULL;
+}
+
+dictionary d_create(int k){
+    dictionary d_head = (dictionary)malloc(sizeof(int*) * 100);//no of transfers ???
+    for(int i=0;i<100;i++)
+        d_head[i] = (int*)malloc(sizeof(int) * k);
+
+    return d_head;
+}
+
+int find_next_neighbor(neighbors* t_head,int cntr,dictionary d_head){
+return -1;
+}
+
+int add_to_dictionary(dictionary* d_head,int next_bank,int tid){
+    dictionary curr = *d_head;
+    for(int i = 0; d_head && i < 100; i++){
+        if(tid = curr[i][0]){
+
+        }
+    }
+    return -1;
 }
