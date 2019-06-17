@@ -123,10 +123,11 @@ void readnparse_commands(char* file){
         tmp = create();
         while( token != NULL ) {
             if(cnt==0){
+
                 strncpy(tmp->op,token,strlen(token));
+                tmp->op[strlen(token)] = '\0';
             } 
             else{
-                // assert(cnt<4);
                 tmp->args[cnt-1] = atoi(token);
             }
             
@@ -162,7 +163,7 @@ int op2num(char* op){
     else if(!strcmp(op,"TRANSFER_FAILED_NO_DEST"))  return 20;
     else if(!strcmp(op,"NOT_FOUND"))     return 21;
     else {
-        printf("op2num else ERRROR\n");
+        printf("op2num else ERRROR %s\n",op);
         return 0;
     }
 }
@@ -191,7 +192,7 @@ char* op2str(int op){
         case 19: return  "TRANSFER_FWD_OK";
         case 20: return  "TRANSFER_FAILED_NO_DEST";
         case 21: return  "NOT_FOUND";
-        default:     printf("op2str else ERRROR\n");return "empty";
+        default:     printf("op2str default ERRROR\n");return "empty";
     }
 }
 void print_list(){

@@ -1,9 +1,7 @@
 #include "list.h"
 
-
-
 int main(int argc, char *argv[]){
-	int rank, world_size, bank_offset; 
+	int rank, world_size, bank_offset,i; 
 
 	if(argc<3){
         printf("Error on number of arguments given\n number of banks and testfile needed\n");
@@ -26,6 +24,9 @@ int main(int argc, char *argv[]){
     MPI_Status status;
     int client_bank[4];
     
+    // FILE *f = fopen("balances.txt","a+");
+
+
     if(!rank){ //coordinator
         int deposit_cntr=0,withdraw_cntr=0,transfer_cntr=0,src=0;
     
@@ -74,9 +75,12 @@ int main(int argc, char *argv[]){
             curr = curr->next;
         }
 
-        while(deposit_cntr || withdraw_cntr || transfer_cntr){
+        //printf("COORDINATOR DONE\n");
+
+        while(deposit_cntr > 0 || withdraw_cntr > 0 || transfer_cntr > 0){
+            // printf("%d | %d | %d \n",deposit_cntr,withdraw_cntr,transfer_cntr);
             MPI_Recv(client_bank,4, MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-            //printf("[rank: %d]  Coordinator received message <%s>: [%d, %d, %d] from %d\n", rank, op2str(status.MPI_TAG), client_bank[0], client_bank[1], client_bank[2], status.MPI_SOURCE);
+            // printf("[rank: %d]  Coordinator received message <%s>: [%d, %d, %d] from %d\n", rank, op2str(status.MPI_TAG), client_bank[0], client_bank[1], client_bank[2], status.MPI_SOURCE);
             switch(status.MPI_TAG){
                 case DEPOSIT_ACK:
                     deposit_cntr --;
@@ -89,7 +93,7 @@ int main(int argc, char *argv[]){
                     break;
             }
         }
-        for(int i = 1;i<world_size;i++)
+        for(i = 1;i<world_size;i++)
             MPI_Send(client_bank,4,MPI_INT,i,SHUTDOWN,MPI_COMM_WORLD);
 
     }else
@@ -123,18 +127,22 @@ int main(int argc, char *argv[]){
                     break;
                 case DEPOSIT:
                     
-                    if((c_curr = get_client(c_head,client_bank[0])) == NULL) 
+                    if((c_curr = get_client(c_head,client_bank[0])) == NULL){
                         printf("ERROR : client not found\n");
+                    }
 
-                    bank_balance +=client_bank[1];
-                    if(c_curr) c_curr->balance += client_bank[1];
+                    if(c_curr){
+                        bank_balance +=client_bank[1];
+                        c_curr->balance += client_bank[1];
+                    }
 
                     client_bank[0] = client_bank[1];client_bank[1] = client_bank[2] = client_bank[3] = 0;
                     MPI_Send(client_bank,4,MPI_INT,status.MPI_SOURCE,DEPOSIT_OK,MPI_COMM_WORLD);
                     break;
                 case WITHDRAW:
-                    if((c_curr = get_client(c_head,client_bank[0])) == NULL) 
+                    if((c_curr = get_client(c_head,client_bank[0])) == NULL){
                         printf("ERROR : client not found\n");
+                    }
 
                     if(c_curr && c_curr->balance >= client_bank[1]){
                         bank_balance -= client_bank[1];                    
@@ -149,8 +157,9 @@ int main(int argc, char *argv[]){
                     }
                     break;
                 case TRANSFER:
-                    if((c_curr = get_client(c_head,client_bank[0])) == NULL) 
+                    if((c_curr = get_client(c_head,client_bank[0])) == NULL){
                         printf("ERROR : client not found\n");
+                    }
                     
                     if(c_curr && c_curr->balance >= client_bank[2]){
                         t_curr = t_create();
@@ -169,19 +178,34 @@ int main(int argc, char *argv[]){
                             client_bank[0] = client_bank[2];client_bank[1] = client_bank[3]; client_bank[2] = client_bank[3] = 0;
                             MPI_Send(client_bank,4,MPI_INT,t_curr->dest,TRANSFER_RECV,MPI_COMM_WORLD);
                         }else{//not banks customer
-
                             if(t_curr -> nghbr_ptr){
-                                MPI_Send(client_bank,4,MPI_INT,t_curr -> nghbr_ptr->id,TRANSFER_FWD,MPI_COMM_WORLD);
+                                client_bank[0] = t_curr->src;
+                                client_bank[1] = t_curr->dest;
+                                client_bank[2] = t_curr->amount;
+                                client_bank[3] = t_curr->tid;
+                                MPI_Send(client_bank,4,MPI_INT,t_curr -> nghbr_ptr -> id,TRANSFER_FWD,MPI_COMM_WORLD);
+                                // printf("\n\nBank %d sent to bank %d for transfer <%d> from client <%d> to client <%d>\n"
+                                //  ,rank,t_curr->nghbr_ptr->id,t_curr->tid,t_curr->src,t_curr->dest);
                                 t_curr -> nghbr_ptr = t_curr -> nghbr_ptr -> next;
                             }else{
+                                client_bank[0] = t_curr->tid;client_bank[1] = client_bank[2] = client_bank[3] = 0;
                                 MPI_Send(client_bank,4,MPI_INT,status.MPI_SOURCE,TRANSFER_FAILED_NO_DEST,MPI_COMM_WORLD);
+                                if((c_curr = get_client(c_head,t_curr->src))!=NULL){
+                                    c_curr->balance += t_curr->amount;
+                                    bank_balance+=t_curr->amount;
+                                }
+                                // printf("\n\nBank %d sent no dest to client %d for transfer <%d> from client <%d> to client <%d>\n"
+                                // ,rank,status.MPI_SOURCE,t_curr->tid,t_curr->src,t_curr->dest);
                             }
                         }
 
                     }else{
                         client_bank[0] = client_bank[3];client_bank[1] = client_bank[2] = client_bank[3] = 0;
                         MPI_Send(client_bank,4,MPI_INT,status.MPI_SOURCE,TRANSFER_FAILED_NOT_ENOUGH_MONEY,MPI_COMM_WORLD);
-
+                        if((c_curr = get_client(c_head,status.MPI_SOURCE))!=NULL){
+                            c_curr->balance += client_bank[2];
+                            bank_balance+=client_bank[2];
+                        }
                     }
 
                     break;
@@ -190,12 +214,17 @@ int main(int argc, char *argv[]){
                         if((t_curr = get_transfer(t_head,client_bank[0])) != NULL){
                             c_curr->balance+= t_curr->amount;
                             bank_balance+=t_curr->amount;
+                            client_bank[0] = t_curr->tid; client_bank[1] = client_bank[2] = client_bank[3] = 0;
                             if(t_curr->banksend){
                                 MPI_Send(client_bank,4,MPI_INT,t_curr->banksend,TRANSFER_FWD_OK,MPI_COMM_WORLD);
                             }else{
                                 MPI_Send(client_bank,4,MPI_INT,t_curr->src,TRANSFER_COMPLETED,MPI_COMM_WORLD);
                             }
+                        }else{
+                            printf("ERROR : Transfer Not Found(Transfer_OK\n");
                         }
+                    }else{
+                        printf("ERROR : Client Not Found(Transfer_OK)\n");
                     }
                     break;
                 case TRANSFER_FWD:
@@ -215,22 +244,32 @@ int main(int argc, char *argv[]){
                     t_insert(&t_head,t_curr);
 
                     if((c_curr = get_client(c_head,t_curr->dest)) != NULL){
-                        client_bank[0] = client_bank[2];client_bank[1] = client_bank[3]; client_bank[2] = client_bank[3] = 0;
+                        client_bank[0] = t_curr -> amount; client_bank[1] = t_curr -> tid; client_bank[2] = client_bank[3] = 0;
                         MPI_Send(client_bank,4,MPI_INT,t_curr->dest,TRANSFER_RECV,MPI_COMM_WORLD);
                         
                     }else{//not banks customer
-                        if(t_curr -> nghbr_ptr && t_curr -> nghbr_ptr -> id == t_curr -> banksend)
-                            t_curr -> nghbr_ptr = t_curr -> nghbr_ptr -> next;
 
-                        if(t_curr -> nghbr_ptr){
-
-                            MPI_Send(client_bank,4,MPI_INT,t_curr-> nghbr_ptr -> id,TRANSFER_FWD_OK,MPI_COMM_WORLD);
+                        if(t_curr -> nghbr_ptr && t_curr -> nghbr_ptr -> id == t_curr -> banksend){
                             t_curr -> nghbr_ptr = t_curr -> nghbr_ptr -> next;
-                        }else{
-                            client_bank[0] = client_bank[3];client_bank[1] = client_bank[2] = client_bank[3] = 0;
-                            MPI_Send(client_bank,4,MPI_INT,t_curr->banksend,NOT_FOUND,MPI_COMM_WORLD);
                         }
 
+                        if(t_curr -> nghbr_ptr){
+                            client_bank[0] = t_curr->src;
+                            client_bank[1] = t_curr->dest;
+                            client_bank[2] = t_curr->amount;
+                            client_bank[3] = t_curr->tid;
+                            MPI_Send(client_bank,4,MPI_INT,t_curr-> nghbr_ptr -> id,TRANSFER_FWD,MPI_COMM_WORLD);
+                            
+                            // printf("\n\nBank %d sent to bank %d for transfer <%d> from client <%d> to client <%d>\n"
+                            // ,rank,t_curr->nghbr_ptr->id,t_curr->tid,t_curr->src,t_curr->dest);
+                            
+                            t_curr -> nghbr_ptr = t_curr -> nghbr_ptr -> next;
+                        }else{
+                            client_bank[0] = client_bank[3]; client_bank[1] = client_bank[2] = client_bank[3] = 0;
+                            MPI_Send(client_bank,4,MPI_INT,t_curr->banksend,NOT_FOUND,MPI_COMM_WORLD);
+                            // printf("\n\nBank %d sent not found to bank %d for transfer <%d> from client <%d> to client <%d>\n"
+                            // ,rank,t_curr->banksend,t_curr->tid,t_curr->src,t_curr->dest);
+                        }
                     }
                     break;
                 case TRANSFER_FWD_OK:
@@ -240,32 +279,54 @@ int main(int argc, char *argv[]){
                         }else{
                             MPI_Send(client_bank,4,MPI_INT,t_curr->src,TRANSFER_COMPLETED,MPI_COMM_WORLD);
                         }
+                    }else{
+                        printf("ERROR : Bank transfer fwd ok transfer not found\n");
                     }
                     break;
                 case NOT_FOUND:
                     if((t_curr = get_transfer(t_head,client_bank[0])) == NULL){
-                        printf("TRANSFER NOT FOUND\n");
+                        printf("TRANSFER NOT FOUND %d\n",client_bank[0]);
                         break;
                     }
 
-                    if(t_curr -> nghbr_ptr && t_curr -> nghbr_ptr -> id == t_curr -> banksend)
+                    if(t_curr -> nghbr_ptr && t_curr -> nghbr_ptr -> id == t_curr -> banksend){
                         t_curr -> nghbr_ptr = t_curr -> nghbr_ptr -> next;
-                        
-                    if(t_curr -> nghbr_ptr){
+                    }
 
-                        MPI_Send(client_bank,4,MPI_INT,t_curr-> nghbr_ptr -> id,TRANSFER_FWD_OK,MPI_COMM_WORLD);
+                    if(t_curr -> nghbr_ptr){
+                        client_bank[0] = t_curr->src;
+                        client_bank[1] = t_curr->dest;
+                        client_bank[2] = t_curr->amount;
+                        client_bank[3] = t_curr->tid;
+                        MPI_Send(client_bank,4,MPI_INT,t_curr-> nghbr_ptr -> id,TRANSFER_FWD,MPI_COMM_WORLD);
+                        
+                        // printf("\n\nBank %d sent to bank %d for transfer <%d> from client <%d> to client <%d>\n"
+                        //     ,rank,t_curr->nghbr_ptr->id,t_curr->tid,t_curr->src,t_curr->dest);
+                            
                         t_curr -> nghbr_ptr = t_curr -> nghbr_ptr -> next;
                     }else{
-                        client_bank[0] = client_bank[3];client_bank[1] = client_bank[2] = client_bank[3] = 0;
-                        MPI_Send(client_bank,4,MPI_INT,t_curr->banksend,NOT_FOUND,MPI_COMM_WORLD);
+                        if(t_curr->banksend){
+                            MPI_Send(client_bank,4,MPI_INT,t_curr->banksend,NOT_FOUND,MPI_COMM_WORLD);
+                            // printf("\n\nBank %d sent not found to bank %d for transfer <%d> from client <%d> to client <%d>\n"
+                            //     ,rank,t_curr->banksend,t_curr->tid,t_curr->src,t_curr->dest);
+                        }else{
+                            MPI_Send(client_bank,4,MPI_INT,t_curr->src,TRANSFER_FAILED_NO_DEST,MPI_COMM_WORLD);
+                            // printf("\n\nBank %d sent no dest to client %d for transfer <%d> from client <%d> to client <%d>\n"
+                            //     ,rank,t_curr->src,t_curr->tid,t_curr->src,t_curr->dest);
+                            if((c_curr = get_client(c_head,t_curr->src))!=NULL){
+                                c_curr->balance += t_curr->amount;
+                                bank_balance+=t_curr->amount;
+                            }
+                        }
+
                     }
 
                     break;
                 case SHUTDOWN:flag=0;break;
                 default: printf("DEFAULT CASE SWITCH BANK\n");break;
             }
-
        }
+
         // printf("\nbank <%d> clients:",rank);
         // c_curr = c_head;
         // while(c_curr != NULL){
@@ -282,13 +343,13 @@ int main(int argc, char *argv[]){
         // }
         // printf("\n");
 
-        // printf("\nbank <%d> clients balance:",rank);
+        // fprintf(f,"\nbank <%d> with balance <%d> ",rank,bank_balance);
         // c_curr = c_head;
         // while(c_curr != NULL){
-        //     printf("|%d:<%d,%d>|",rank,c_curr->id,c_curr->balance);
+        //     fprintf(f,"|%d:<%d,%d>|",rank,c_curr->id,c_curr->balance);
         //     c_curr = c_curr->next;
         // }
-        // printf("\n");
+        // fprintf(f,"\n");
 
     }else{//clients
         int mybank=0,flag=1,mybalance = 0;
@@ -300,7 +361,7 @@ int main(int argc, char *argv[]){
 
         while(flag){
             MPI_Recv(client_bank,4 , MPI_INT, MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-            // printf("[rank: %d]  Client received message <%s>: [%d, %d, %d] from %d\n", rank, op2str(status.MPI_TAG), client_bank[0], client_bank[1], client_bank[2], status.MPI_SOURCE);
+            //printf("[rank: %d]  Client received message <%s>: [%d, %d, %d] from %d\n", rank, op2str(status.MPI_TAG), client_bank[0], client_bank[1], client_bank[2], status.MPI_SOURCE);
             switch(status.MPI_TAG){
                 case 0: break;
                 case DEPOSIT: 
@@ -338,6 +399,8 @@ int main(int argc, char *argv[]){
                     if(t_curr && (t_curr = get_transfer(t_head,client_bank[0])) != NULL){
                         MPI_Send(client_bank,4,MPI_INT,COORDINATOR,TRANSFER_ACK,MPI_COMM_WORLD);
                         printf("CLIENT <%d> TRANSFER <%d> TO <%d> NOT ENOUGH MONEY \n",t_curr->src,t_curr->amount,t_curr->dest);
+                    }else{
+                        printf("ERROR : Client transfer not found\n");
                     }
                     break;
                 case TRANSFER_RECV:
@@ -350,25 +413,28 @@ int main(int argc, char *argv[]){
                         mybalance-= t_curr->amount;
                         MPI_Send(client_bank,4,MPI_INT,COORDINATOR,TRANSFER_ACK,MPI_COMM_WORLD);
                         printf("CLIENT <%d> TRANSFER <%d> TO <%d> OK\n",t_curr->src,t_curr->amount,t_curr->dest);
+                    }else{
+                        printf("ERROR : Client transfer not found\n");
                     }
                     break;
                 case TRANSFER_FAILED_NO_DEST:
                     if(t_curr && (t_curr = get_transfer(t_head,client_bank[0])) != NULL){
                         MPI_Send(client_bank,4,MPI_INT,COORDINATOR,TRANSFER_ACK,MPI_COMM_WORLD);
                         printf("CLIENT <%d> TRANSFER <%d> TO <%d> NO DEST\n",t_curr->src,t_curr->amount,t_curr->dest);
+                    }else{
+                        printf("ERROR : Client transfer not found\n");
                     }
                     break;
                 case SHUTDOWN: flag=0;break;
                 default: printf("DEFAULT CASE SWITCH CLIENT\n");break;
                 
             }
-
         }
-        // printf("CLIENT |%d:<%d><%d>\n",mybank,rank,mybalance);
-       // printf("\nCLIENT<%d> : mybank <%d>\n",rank,mybank);
+        // fprintf(f,"CLIENT BALANCE |%d:<%d><%d>\n",mybank,rank,mybalance);
+        // printf("\nCLIENT<%d> : mybank <%d>\n",rank,mybank);
     }
 
-
+    // fclose(f);
     MPI_Finalize();
 
     return 0;
