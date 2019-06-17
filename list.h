@@ -7,6 +7,8 @@
 #include <mpi/mpi.h>
 
 #define DELIMETERS          " \n\r\t"
+#define HASHSIZE 101
+
 #define COORDINATOR         0
 #define CLIENT              1
 #define NEIGHBOR            2
@@ -30,7 +32,11 @@
 #define TRANSFER_FAILED_NO_DEST 20
 #define NOT_FOUND           21
 
-#define dictionary          int**
+typedef struct dictionary { 
+    int tid; 
+    int *banks;
+    struct dictionary *next; 
+}dictionary;
 
 
 typedef struct command{
@@ -56,6 +62,7 @@ typedef struct transfers{
     int dest;
     int amount;
     int banksend;
+    struct neighbors *nghbr_ptr;
     struct transfers *next;
 }transfers;
 
@@ -78,6 +85,3 @@ void        readnparse_commands(char*);
 void        print_list(); 
 int         op2num(char*);
 char*       op2str(int);
-
-int find_next_neighbor(neighbors*,int,dictionary);
-int add_to_dictionary(dictionary*,int,int);

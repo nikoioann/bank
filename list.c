@@ -72,7 +72,9 @@ int n_insert(neighbors **n_head,neighbors* ptr){
 transfers *t_create(void){
     transfers *ptr = (transfers*)malloc(sizeof(struct transfers));
     ptr->tid = ptr->src = ptr->dest = ptr->amount = ptr->banksend = 0;
-    ptr->next   = NULL;
+    ptr->next = NULL;
+    ptr->nghbr_ptr = NULL;
+
     return ptr;
 }
 
@@ -151,6 +153,14 @@ int op2num(char* op){
     else if(!strcmp(op,"WITHDRAW_FAILED"))  return 11;
     else if(!strcmp(op,"WITHDRAW_ACK"))     return 12;
     else if(!strcmp(op,"TRANSFER_ACK"))     return 13;
+    else if(!strcmp(op,"TRANSFER_FAILED_NOT_ENOUGH_MONEY"))     return 14;
+    else if(!strcmp(op,"TRANSFER_RECV"))    return 15;
+    else if(!strcmp(op,"TRANSFER_OK"))      return 16;
+    else if(!strcmp(op,"TRANSFER_COMPLETED"))       return 17;
+    else if(!strcmp(op,"TRANSFER_FWD"))     return 18;
+    else if(!strcmp(op,"TRANSFER_FWD_OK"))  return 19;
+    else if(!strcmp(op,"TRANSFER_FAILED_NO_DEST"))  return 20;
+    else if(!strcmp(op,"NOT_FOUND"))     return 21;
     else {
         printf("op2num else ERRROR\n");
         return 0;
@@ -173,7 +183,15 @@ char* op2str(int op){
         case 11: return  "WITHDRAW_FAILED";
         case 12: return  "WITHDRAW_ACK";
         case 13: return  "TRANSFER_ACK";
-        default:     printf("op2num else ERRROR\n");return "empty";
+        case 14: return  "TRANSFER_FAILED_NOT_ENOUGH_MONEY";
+        case 15: return  "TRANSFER_RECV";
+        case 16: return  "TRANSFER_OK";
+        case 17: return  "TRANSFER_COMPLETED";
+        case 18: return  "TRANSFER_FWD";
+        case 19: return  "TRANSFER_FWD_OK";
+        case 20: return  "TRANSFER_FAILED_NO_DEST";
+        case 21: return  "NOT_FOUND";
+        default:     printf("op2str else ERRROR\n");return "empty";
     }
 }
 void print_list(){
@@ -206,24 +224,3 @@ transfers *get_transfer(transfers* head,int tid){
     return NULL;
 }
 
-dictionary d_create(int k){
-    dictionary d_head = (dictionary)malloc(sizeof(int*) * 100);//no of transfers ???
-    for(int i=0;i<100;i++)
-        d_head[i] = (int*)malloc(sizeof(int) * k);
-
-    return d_head;
-}
-
-int find_next_neighbor(neighbors* t_head,int cntr,dictionary d_head){
-return -1;
-}
-
-int add_to_dictionary(dictionary* d_head,int next_bank,int tid){
-    dictionary curr = *d_head;
-    for(int i = 0; d_head && i < 100; i++){
-        if(tid = curr[i][0]){
-
-        }
-    }
-    return -1;
-}
